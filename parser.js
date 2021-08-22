@@ -165,8 +165,8 @@ let toJson = (data, identifiers)=>{
 
     console.log(tokens);
     console.log(JSON.stringify(tree))
-    fs.writeFile("test.json", JSON.stringify(tree), ()=>{console.log("Done.");});
-    fs.writeFile("test2.json", JSON.stringify(response), ()=>{console.log("Done.");});
+    fs.writeFile("treeStructure.json", JSON.stringify(tree), ()=>{console.log("Done.");});
+    fs.writeFile("output.json", JSON.stringify(response), ()=>{console.log("Done.");});
 
     console.log(identifiers['|*-start-text-group-*|']);
 }
