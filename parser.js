@@ -1,37 +1,42 @@
-var PDFParser = require("pdf2json");
 var fs = require('fs');
 var identifiers = require("./identifiers");
 var text = require("./text")
+const pdf = require('pdf-parse');
 
 let reader = () => {
 
 
-    let pdfPath = "test_pdf_f.pdf"
-    let pdfParser = new PDFParser(this,1);
+    let pdfPath = "input.pdf"
+    let dataBuffer = fs.readFileSync(pdfPath);
 
-    pdfParser.on("pdfParser_dataError", errData => console.error(errData.parserError) );
+    pdf(dataBuffer).then(function(data) {
+ 
+        let {docStructure, result} = toJson(data.text,identifiers);       
+        
+        fs.writeFile("output.json", JSON.stringify(result), ()=>{console.log("Done.");});
+        fs.writeFile("docStructure.json", JSON.stringify(docStructure), ()=>{});
 
-    pdfParser.on("pdfParser_dataReady", pdfData => {
-        let data = pdfParser.getRawTextContent();
-        data = text
-        toJson(data,identifiers);        
-      
-        fs.writeFile("test.txt", pdfParser.getRawTextContent(), ()=>{console.log("Done.");});
+            
     });
-
-
-    pdfParser.loadPDF(pdfPath);
+    
 
     
-  
-
-
 }
+
+String.prototype.toProperCase = function () {
+    return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+};
+
+String.prototype.toCamelCase = function () {
+    return this.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function(match, index) {
+        if (+match === 0) return "";
+        return index === 0 ? match.toLowerCase() : match.toUpperCase();
+    });
+};
 
 let tokenize = (data) => {
 
     data = data.replace(/\n/g, " NEWLINE ");
-    console.log(data);
 
     let i = 0;
     let word = "";
@@ -61,114 +66,147 @@ let tokenize = (data) => {
 
 let toJson = (data, identifiers)=>{
    
-    let tokens = tokenize(data);
+    try{
+        let tokens = tokenize(data);
 
-    let stack = [];
-    let rem = "";
-    let tree = {root:{'children': []}};
-    stack.push(tree['root']);
-    let top = stack[0];
+        let stack = [];
+        let rem = "";
+        var tree = {root:{'children': []}};
+        stack.push(tree['root']);
+        let top = stack[0];
 
-    // forming a tree structure of the page
-    for(let i=0; i < tokens.length; i++){
+        // forming a tree structure of the page
+        for(let i=0; i < tokens.length; i++){
 
-        let token = tokens[i];
-        let closingTagStart = token.indexOf("</");
-        console.log(token, "outer", closingTagStart);
-        if(token[0] === '<' && token[1] !== '/'){
-            let j = token.indexOf('>');
-            let identifier = {...identifiers[token.substring(0,j+1)]};
-            if(identifier){
-                stack[stack.length-1].children.push({
-                    type:"content", 
-                    value: rem
-                });
-                rem = token.substring(j+1);
-                identifier['children'] = [];
-                stack.push(identifier);
-            }
-
-        }
-        else if(closingTagStart !== -1 ){
-            console.log(token, "inner")
-            let closingTagEnd = token.indexOf('>');
-            if(closingTagStart < closingTagEnd){
-                let tag = token.substring(closingTagStart, closingTagEnd+1);
-                rem += token.substring(0,closingTagStart);
-                top = stack[stack.length - 1 ];
-                top['children'].push({
-                    type:"content", 
-                    value: rem
-                });
-                stack.pop();
-                stack[stack.length - 1].children.push(top);
-                rem = "";
-            }
-
-        }
-        else{
-            rem += token + " ";
-        }
-    }
-    
-    // formatting in the specified format.
-    let index = 1;
-    let response = [];
-    for(let child of tree.root.children){
-        if(child.type === "content" && (["", "NEWLINE"].includes(child.value.trim()) ) ){
-            continue;
-        }
-        else if(child.type === "section-header"){
-            let dataLoadArray = [];
-            dataLoadArray.push(child.children[0].value)
-
-            response.push({
-                index,
-                type: child.type,
-                indexName: child.indexNameText + index,
-                dataLoadArray
-            });
-
-        }
-        else if(child.type === "fixed-text-grouped"){
-
-            let variableArray = [];
-            let dataLoadArray = [];
-
-            for(let grandChild of child.children){
-                
-                if(grandChild.type === "content"){
-                    dataLoadArray.push(...grandChild.value.split('NEWLINE'))
-                }
-                else if(grandChild.type === "variable"){
-                    variableArray.push({
-                        variableType: grandChild.variableType,
-                        variableName: grandChild.variableName || grandChild.variableType
+            let token = tokens[i];
+            let closingTagStart = token.indexOf("</");
+            if(token[0] === '<' && token[1] !== '/'){
+                let j = token.indexOf('>');
+                let identifier = {...identifiers[token.substring(0,j+1)]};
+                if(identifier){
+                    stack[stack.length-1].children.push({
+                        type:"content", 
+                        value: rem
                     });
-                    dataLoadArray.push(grandChild.children[0].value)
+                    rem = token.substring(j+1);
+                    identifier['children'] = [];
+                    stack.push(identifier);
                 }
+
             }
-            
-            response.push({
-                index,
-                type: child.type,
-                indexName: child.indexNameText + index,
-                variableArray,
-                dataLoadArray
-            });
+            else if(closingTagStart !== -1 ){
+                let closingTagEnd = token.indexOf('>');
+                if(closingTagStart < closingTagEnd){
+                    let tag = token.substring(closingTagStart, closingTagEnd+1);
+                    rem += token.substring(0,closingTagStart);
+                    top = stack[stack.length - 1 ];
+                    top['children'].push({
+                        type:"content", 
+                        value: rem
+                    });
+                    stack.pop();
+                    stack[stack.length - 1].children.push(top);
+                    rem = "";
+                }
+
+            }
+            else{
+                rem += token + " ";
+            }
+        }
+        
+        // formatting in the specified format.
+        let index = 1;
+        var response = [];
+        for(let child of tree.root.children){
+            if(child.type === "content" && (["", "NEWLINE"].includes(child.value.trim()) ) ){
+                continue;
+            }
+            else if(child.type === "section-header"){
+                let dataLoadArray = [];
+                dataLoadArray.push(child.children[0].value)
+
+                response.push({
+                    index,
+                    type: child.type,
+                    indexName: child.indexNameText + index,
+                    dataLoadArray
+                });
+
+                index++;
+
+            }
+            else if(child.type === "fixed-text-grouped"){
+
+                let variableArray = [];
+                let dataLoadArray = [];
+
+                for(let grandChild of child.children){
+                    let temp = [];
+                    if(grandChild.type === "content"){
+                        let newTemp = [];
+                        grandChild.value.split('NEWLINE').forEach((elem)=>{
+                            if(elem === ""){
+                                return;
+                            }
+                            else if(elem === " "){
+                                newTemp[newTemp.length - 1] = "|*-format-break-*|" ;
+                            }
+                            else{
+                                newTemp.push(elem);
+                                newTemp.push("|*-newline-*|")
+                            }
+                        });
+
+                        dataLoadArray.push(...newTemp);
+
+                    }
+                    else if(grandChild.type === "variable"){
+                        grandChild.children[0].value = grandChild.children[0].value.replace('NEWLINE','').trim();
+                        variableArray.push({
+                            variableType: grandChild.variableType,
+                            variableName: grandChild.children[0].value.toProperCase(),
+                            variableDisplayName: grandChild.children[0].value.toCamelCase()
+                        });
+                        dataLoadArray.push("|*-variable-*|")
+                    }
+                }
+                
+                response.push({
+                    index,
+                    type: child.type,
+                    indexName: child.indexNameText + index,
+                    variableArray,
+                    dataLoadArray
+                });
+                index++;
+
+            }
+
+           
 
         }
 
-        index++;
-
+        return {
+            docStructure: tree,
+            result: {
+                "agreementCustomFields": {"":""},
+                "counterpartyInputFields": {"":""},
+                "tldrModeAvailable":false,
+                "hasToSignAsOrganization":false,
+                "counterpartyHasToSignAsOrganization":false,
+                "counterpartyInputRequired":false,
+                "creatorPartyLabel":"",
+                "counterPartyLabel":"",
+                "agreementTextContent": response
+            }
+        }
     }
-
-    console.log(tokens);
-    console.log(JSON.stringify(tree))
-    fs.writeFile("treeStructure.json", JSON.stringify(tree), ()=>{console.log("Done.");});
-    fs.writeFile("output.json", JSON.stringify(response), ()=>{console.log("Done.");});
-
-    console.log(identifiers['|*-start-text-group-*|']);
+    catch(err){
+        console.log(Err)
+    }
+   
+   
 }
 
 (function(){
