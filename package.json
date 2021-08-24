@@ -1,0 +1,23 @@
+{
+  "name": "CONTRACT-PARSER",
+  "version": "1.0.0",
+  "description": "A parser which parse contract pdf template into json. The format is private.",
+  "main": "identifiers.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MuhammadAhmed8/CONTRACT-PARSER.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MuhammadAhmed8/CONTRACT-PARSER/issues"
+  },
+  "homepage": "https://github.com/MuhammadAhmed8/CONTRACT-PARSER#readme",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}
