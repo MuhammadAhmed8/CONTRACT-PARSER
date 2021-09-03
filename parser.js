@@ -10,9 +10,9 @@ let reader = () => {
     let dataBuffer = fs.readFileSync(pdfPath);
 
     pdf(dataBuffer).then(function(data) {
- 
-        let {docStructure, result} = toJson(data.text,identifiers);       
         
+        let {docStructure, result} = toJson(data.text,identifiers);       
+
         fs.writeFile("output.json", JSON.stringify(result), ()=>{console.log("Done.");});
         fs.writeFile("docStructure.json", JSON.stringify(docStructure), ()=>{});
 
@@ -37,7 +37,7 @@ String.prototype.toCamelCase = function () {
 let tokenize = (data) => {
 
     data = data.replace(/\n/g, " NEWLINE ");
-
+    
     let i = 0;
     let word = "";
     let tokens = [];
@@ -60,6 +60,7 @@ let tokenize = (data) => {
         
     }
     tokens.push(word)
+    console.log(tokens)
     return tokens;
 }
 
@@ -116,24 +117,32 @@ let toJson = (data, identifiers)=>{
         }
         
         // formatting in the specified format.
-        let index = 1;
+        let indexId = 1;
         var response = [];
         for(let child of tree.root.children){
-            if(child.type === "content" && (["", "NEWLINE"].includes(child.value.trim()) ) ){
+            
+            if(child.type === "content" && child.value.split("NEWLINE").length > 2){
+                response.push({
+                    indexId,
+                    type: 'format-break',
+                    indexName: 'break'
+                });
+                indexId++;
+            }
+            else if(child.type === "content" && (["", "NEWLINE"].includes(child.value.trim()) ) ){
                 continue;
             }
             else if(child.type === "section-header"){
-                let dataLoadArray = [];
-                dataLoadArray.push(child.children[0].value)
+                let dataLoad = child.children[0].value;
 
                 response.push({
-                    index,
+                    indexId,
                     type: child.type,
-                    indexName: child.indexNameText + index,
-                    dataLoadArray
+                    indexName: child.indexNameText + indexId,
+                    dataLoad
                 });
 
-                index++;
+                indexId++;
 
             }
             else if(child.type === "fixed-text-grouped"){
@@ -142,7 +151,6 @@ let toJson = (data, identifiers)=>{
                 let dataLoadArray = [];
 
                 for(let grandChild of child.children){
-                    let temp = [];
                     if(grandChild.type === "content"){
                         let newTemp = [];
                         grandChild.value.split('NEWLINE').forEach((elem)=>{
@@ -153,8 +161,8 @@ let toJson = (data, identifiers)=>{
                                 newTemp[newTemp.length - 1] = "|*-format-break-*|" ;
                             }
                             else{
-                                newTemp.push(elem);
-                                newTemp.push("|*-newline-*|")
+                                newTemp.push(elem.trim());
+                                newTemp.push("|*-next-line-*|")
                             }
                         });
 
@@ -173,13 +181,13 @@ let toJson = (data, identifiers)=>{
                 }
                 
                 response.push({
-                    index,
+                    indexId,
                     type: child.type,
-                    indexName: child.indexNameText + index,
+                    indexName: child.indexNameText + indexId,
                     variableArray,
                     dataLoadArray
                 });
-                index++;
+                indexId++;
 
             }
 
